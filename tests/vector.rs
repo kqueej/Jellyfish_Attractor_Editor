@@ -1,6 +1,5 @@
 use jellyfish::math::{Vec2, Vec3};
 
-
 #[test]
 // for Vec2
 fn vector2_creation() {
@@ -92,7 +91,7 @@ fn vector2_multiplication() {
     let vector = Vec2::new([2.0, 3.0]);
     let result = vector * 4.0;
 
-        assert_eq!(result.as_array(), &[8.0, 12.0]);
+    assert_eq!(result.as_array(), &[8.0, 12.0]);
 }
 
 #[test]
