@@ -1,7 +1,6 @@
 use jellyfish::math::{Vec2, Vec3};
 
-fn main()
-{
+fn main() {
     let point_2d = Vec2::new([1.0, 2.0]);
     let point_3d = Vec3::new([1.0, 2.0, 3.0]);
 
