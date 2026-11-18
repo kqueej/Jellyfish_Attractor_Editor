@@ -1,8 +1,10 @@
 mod integrator;
 mod lorenz;
+mod rk4;
 mod system;
 mod trajectory;
 pub use integrator::euler_step;
 pub use lorenz::Lorenz;
+pub use rk4::rk4_step;
 pub use system::DynamicalSystem;
 pub use trajectory::generate_trajectory;
