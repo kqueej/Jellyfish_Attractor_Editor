@@ -1,4 +1,4 @@
-use jellyfish::dynamics::{DynamicalSystem, rk4_step, euler_step, generate_trajectory};
+use jellyfish::dynamics::{DynamicalSystem, euler_step, generate_trajectory, rk4_step};
 use jellyfish::math::Vector;
 
 struct Exponential;
@@ -36,16 +36,25 @@ fn rk4_more_accurate_than_euler() {
 fn rk4_trajectory_accuracy() {
     let system = Exponential;
     let initial = Vector::<1>::new([1.0]);
-    let trajectory = generate_trajectory(
-        &system, 
-        initial, 
-        0.1, 
-        10, 
-        rk4_step
-    );
+    let trajectory = generate_trajectory(&system, initial, 0.1, 10, 0, rk4_step);
     let last = trajectory.last().unwrap();
     let actual = last.as_array()[0];
     let expected = std::f64::consts::E;
     assert!((actual - expected).abs() < 1e-5);
+}
 
+#[test]
+fn rk4_trajectory_with_warmup() {
+    let system = Exponential;
+    let initial = Vector::<1>::new([1.0]);
+    let trajectory = generate_trajectory(&system, initial, 0.1, 10, 10, rk4_step);
+
+    let first = trajectory[0].as_array()[0];
+    let last = trajectory[10].as_array()[0];
+    let expected_first = std::f64::consts::E;
+    let expected_last = std::f64::consts::E.powi(2);
+
+    assert_eq!(trajectory.len(), 11);
+    assert!((first - expected_first).abs() < 2e-5);
+    assert!((last - expected_last).abs() < 2e-5);
 }

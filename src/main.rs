@@ -1,12 +1,17 @@
-use jellyfish::math::{Vec2, Vec3};
+use jellyfish::dynamics::{Lorenz, generate_trajectory, rk4_step};
+use jellyfish::math::Vec3;
 
 fn main() {
-    let point_2d = Vec2::new([1.0, 2.0]);
-    let point_3d = Vec3::new([1.0, 2.0, 3.0]);
+    let system = Lorenz {
+        sigma: 10.0,
+        rho: 28.0,
+        beta: 8.0 / 3.0,
+    };
 
-    println!("2D: {:?}", point_2d);
-    println!("3D: {:?}", point_3d);
+    let initial = Vec3::new([1.0, 1.0, 1.0]);
 
-    println!("2D coordinates: {:?}", point_2d.as_array());
-    println!("3D coordinates: {:?}", point_3d.as_array());
+    let trajectory = generate_trajectory(&system, initial, 0.01, 10_000, 1_000, rk4_step);
+
+    println!("trajectory points: {}", trajectory.len());
+    println!("last point: {:?}", trajectory.last().unwrap());
 }
