@@ -1,4 +1,4 @@
-use super::{DynamicalSystem, euler_step};
+use super::DynamicalSystem;
 use crate::math::Vector;
 
 pub fn generate_trajectory<S, const N: usize>(
@@ -6,6 +6,7 @@ pub fn generate_trajectory<S, const N: usize>(
     initial_state: Vector<N>,
     step: f64,
     count: usize,
+    integrator: fn(&S, f64, &Vector<N>, f64) -> Vector<N>,
 ) -> Vec<Vector<N>>
 where
     S: DynamicalSystem<N>,
@@ -16,7 +17,7 @@ where
     trajectory.push(state);
 
     for _ in 0..count {
-        state = euler_step(system, time, &state, step);
+        state = integrator(system, time, &state, step);
         time += step;
 
         trajectory.push(state);
