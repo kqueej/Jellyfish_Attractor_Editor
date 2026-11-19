@@ -1,5 +1,5 @@
 use jellyfish::dynamics::{Lorenz, generate_trajectory, rk4_step};
-use jellyfish::math::Vec3;
+use jellyfish::math::{Bounds, Vec3};
 
 fn main() {
     let system = Lorenz {
@@ -11,7 +11,11 @@ fn main() {
     let initial = Vec3::new([1.0, 1.0, 1.0]);
 
     let trajectory = generate_trajectory(&system, initial, 0.01, 10_000, 1_000, rk4_step);
-
     println!("trajectory points: {}", trajectory.len());
     println!("last point: {:?}", trajectory.last().unwrap());
+
+    let bounds = Bounds::from_points(&trajectory).unwrap();
+
+    println!("Min: Vector: {:?}", bounds.min);
+    println!("Max: Vector: {:?}", bounds.max);
 }
