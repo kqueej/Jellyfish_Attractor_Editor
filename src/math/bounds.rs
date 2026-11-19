@@ -24,4 +24,12 @@ impl<const N: usize> Bounds<N> {
             max: Vector::new(max),
         })
     }
+
+    pub fn center(&self) -> Vector<N> {
+        (self.min + self.max) / 2.0
+    }
+
+    pub fn size(&self) -> Vector<N> {
+        self.max - self.min
+    }
 }

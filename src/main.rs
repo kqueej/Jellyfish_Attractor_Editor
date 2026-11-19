@@ -16,6 +16,11 @@ fn main() {
 
     let bounds = Bounds::from_points(&trajectory).unwrap();
 
-    println!("Min: Vector: {:?}", bounds.min);
-    println!("Max: Vector: {:?}", bounds.max);
+    println!("Min: {:?}", bounds.min);
+    println!("Max: {:?}", bounds.max);
+
+    let center = (bounds.min + bounds.max) / 2.0;
+    let size = bounds.max - bounds.min;
+    println!("Center of attractor: {:?}", center);
+    println!("Size of attractor: {:?}", size);
 }

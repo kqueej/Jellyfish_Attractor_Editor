@@ -28,3 +28,16 @@ fn bounds_empty() {
 
     assert_eq!(Bounds::from_points(&points), None);
 }
+
+#[test]
+fn bounds_center_and_size() {
+    let points = [
+        Vec3::new([-2.0, 4.0, 0.0]),
+        Vec3::new([6.0, 10.0, 8.0]),
+    ];
+
+    let bounds = Bounds::from_points(&points).unwrap();
+    assert_eq!(bounds.center(), Vec3::new([2.0, 7.0, 4.0]));
+    assert_eq!(bounds.size(), Vec3::new([8.0, 6.0, 8.0]));
+
+}
