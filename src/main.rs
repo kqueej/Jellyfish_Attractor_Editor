@@ -19,8 +19,6 @@ fn main() {
     println!("Min: {:?}", bounds.min);
     println!("Max: {:?}", bounds.max);
 
-    let center = (bounds.min + bounds.max) / 2.0;
-    let size = bounds.max - bounds.min;
-    println!("Center of attractor: {:?}", center);
-    println!("Size of attractor: {:?}", size);
+    println!("Center of attractor: {:?}", bounds.center());
+    println!("Size of attractor: {:?}", bounds.size());
 }
