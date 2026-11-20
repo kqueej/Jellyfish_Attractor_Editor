@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use wgpu::CurrentSurfaceTexture::{Suboptimal, Success};
 use wgpu::PowerPreference::HighPerformance;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -13,6 +14,7 @@ struct App {
     adapter: Option<wgpu::Adapter>,
     device: Option<wgpu::Device>,
     queue: Option<wgpu::Queue>,
+    config: Option<wgpu::SurfaceConfiguration>,
 }
 
 impl ApplicationHandler for App {
@@ -59,6 +61,24 @@ impl ApplicationHandler for App {
         let (device, queue) = pollster::block_on(future).unwrap();
         self.device = Some(device);
         self.queue = Some(queue);
+
+        let surface = self.surface.as_ref().unwrap();
+        let size = window.inner_size();
+        let config = surface
+            .get_default_config(adapter, size.width, size.height)
+            .unwrap();
+
+        println!("surface size: {}x{}", config.width, config.height);
+        println!("surface format: {:?}", config.format);
+        println!("mode: {:?}", config.present_mode);
+
+        let device = self.device.as_ref().unwrap();
+        surface.configure(device, &config);
+        println!("surface configured success");
+
+        self.config = Some(config);
+
+        window.request_redraw();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -67,6 +87,47 @@ impl ApplicationHandler for App {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
+
+            WindowEvent::RedrawRequested => {
+                println!("Redraw requested");
+                let current_texture = (self.surface.as_ref().unwrap()).get_current_texture();
+
+                match current_texture {
+                    Success(texture) | Suboptimal(texture) => {
+                        println!("frame acquired");
+                        let view = texture
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
+
+                        let device = self.device.as_ref().unwrap();
+
+                        let descriptor = wgpu::CommandEncoderDescriptor {
+                            label: Some("jellyfish encoder"),
+                        };
+                        let mut encoder = device.create_command_encoder(&descriptor);
+
+                        let color_attachment = wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.02,
+                                    g: 0.03,
+                                    b: 0.05,
+                                    a: 1.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        };
+                    }
+
+                    other => {
+                        println!("surface status {:?}", other);
+                    }
+                }
+            }
+
             _ => (),
         }
     }
