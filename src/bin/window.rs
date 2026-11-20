@@ -148,10 +148,32 @@ impl ApplicationHandler for App {
                 }
             }
 
+            WindowEvent::Resized(size) => {
+                self.resize(size);
+            }
+
             _ => (),
         }
     }
 }
+
+impl App {
+    fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+
+        if size.width == 0 || size.height == 0 {
+            return;
+            }
+        let config = self.config.as_mut().unwrap();
+        let device = self.device.as_ref().unwrap();
+        let surface = self.surface.as_ref().unwrap();
+        config.width = size.width;
+        config.height = size.height;
+        surface.configure(device, config);
+        println!("window resized: {}x{}", size.width, size.height);
+        self.window.as_ref().unwrap().request_redraw();
+    }
+}
+
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
