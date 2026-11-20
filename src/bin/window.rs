@@ -1,7 +1,12 @@
+use jellyfish::dynamics::{Lorenz, generate_trajectory, rk4_step};
+use jellyfish::graphics::projection::project_xy;
+use jellyfish::graphics::vertex::Vertex;
+use jellyfish::math::Vec3;
 use std::sync::Arc;
 use std::time::Instant;
 use wgpu::CurrentSurfaceTexture::{Suboptimal, Success};
 use wgpu::PowerPreference::HighPerformance;
+use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -19,6 +24,9 @@ struct App {
     last_frame: Option<Instant>,
     fps_elapsed: f64,
     fps_frames: u32,
+    vertex_buffer: Option<wgpu::Buffer>,
+    render_pipeline: Option<wgpu::RenderPipeline>,
+    vertex_count: u32,
 }
 
 impl ApplicationHandler for App {
@@ -82,6 +90,76 @@ impl ApplicationHandler for App {
 
         self.config = Some(config);
 
+        let system = Lorenz {
+            sigma: 10.0,
+            rho: 28.0,
+            beta: 8.0 / 3.0,
+        };
+
+        let initial = Vec3::new([1.0, 1.0, 1.0]);
+        let trajectory = generate_trajectory(&system, initial, 0.01, 10_000, 1000, rk4_step);
+
+        let points: Vec<[f64; 3]> = trajectory.iter().map(|point| *point.as_array()).collect();
+        let vertices = project_xy(&points);
+
+        self.vertex_count = vertices.len().try_into().unwrap();
+
+        let buffer_descriptor = wgpu::util::BufferInitDescriptor {
+            label: Some("Jellyfish vertex buffer"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        };
+
+        let vertex_buffer = device.create_buffer_init(&buffer_descriptor);
+
+        self.vertex_buffer = Some(vertex_buffer);
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Jellyfish line shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../graphics/shaders/line.wgsl").into()),
+        });
+
+        let vertex_layouts = [Some(Vertex::layout())];
+
+        let color_targets = [Some(wgpu::ColorTargetState {
+            format: self.config.as_ref().unwrap().format,
+            blend: Some(wgpu::BlendState::REPLACE),
+            write_mask: wgpu::ColorWrites::ALL,
+        })];
+
+        let pipeline_descriptor = wgpu::RenderPipelineDescriptor {
+            label: Some("Jellyfish line pipeline"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &vertex_layouts,
+            },
+
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineStrip,
+                ..Default::default()
+            },
+
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &color_targets,
+            }),
+
+            multiview_mask: None,
+            cache: None,
+        };
+
+        let render_pipeline = device.create_render_pipeline(&pipeline_descriptor);
+        self.render_pipeline = Some(render_pipeline);
+
+        // redraw
         window.request_redraw();
     }
 
@@ -185,7 +263,18 @@ impl App {
                 };
 
                 {
-                    let _render_pass = encoder.begin_render_pass(&render_pass_descriptor);
+                    let mut render_pass = encoder.begin_render_pass(&render_pass_descriptor);
+
+                    let pipeline = self.render_pipeline.as_ref().unwrap();
+
+                    let vertex_buffer = self.vertex_buffer.as_ref().unwrap();
+
+                    render_pass.set_pipeline(pipeline);
+
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+
+                    // draw
+                    render_pass.draw(0..self.vertex_count, 0..1);
                 }
 
                 let command_buffer = encoder.finish();
