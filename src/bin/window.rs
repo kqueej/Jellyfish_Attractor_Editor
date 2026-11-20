@@ -120,6 +120,26 @@ impl ApplicationHandler for App {
                                 store: wgpu::StoreOp::Store,
                             },
                         };
+
+                        let color_attachments = [Some(color_attachment)];
+
+                        let render_pass_descriptor = wgpu::RenderPassDescriptor {
+                            label: Some("Jellyfish render pass"),
+                            color_attachments: &color_attachments,
+                            depth_stencil_attachment: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                            multiview_mask: None,
+                        };
+
+                        {
+                            let _render_pass = encoder.begin_render_pass(&render_pass_descriptor);
+                        }
+
+                        let command_buffer = encoder.finish();
+                        let queue = self.queue.as_ref().unwrap();
+                        queue.submit([command_buffer]);
+                        queue.present(texture);
                     }
 
                     other => {
