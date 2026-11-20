@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 use wgpu::CurrentSurfaceTexture::{Suboptimal, Success};
 use wgpu::PowerPreference::HighPerformance;
 use winit::application::ApplicationHandler;
@@ -15,6 +16,9 @@ struct App {
     device: Option<wgpu::Device>,
     queue: Option<wgpu::Queue>,
     config: Option<wgpu::SurfaceConfiguration>,
+    last_frame: Option<Instant>,
+    fps_elapsed: f64,
+    fps_frames: u32,
 }
 
 impl ApplicationHandler for App {
@@ -89,63 +93,7 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                println!("Redraw requested");
-                let current_texture = (self.surface.as_ref().unwrap()).get_current_texture();
-
-                match current_texture {
-                    Success(texture) | Suboptimal(texture) => {
-                        println!("frame acquired");
-                        let view = texture
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-
-                        let device = self.device.as_ref().unwrap();
-
-                        let descriptor = wgpu::CommandEncoderDescriptor {
-                            label: Some("jellyfish encoder"),
-                        };
-                        let mut encoder = device.create_command_encoder(&descriptor);
-
-                        let color_attachment = wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 0.02,
-                                    g: 0.03,
-                                    b: 0.05,
-                                    a: 1.0,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        };
-
-                        let color_attachments = [Some(color_attachment)];
-
-                        let render_pass_descriptor = wgpu::RenderPassDescriptor {
-                            label: Some("Jellyfish render pass"),
-                            color_attachments: &color_attachments,
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                            multiview_mask: None,
-                        };
-
-                        {
-                            let _render_pass = encoder.begin_render_pass(&render_pass_descriptor);
-                        }
-
-                        let command_buffer = encoder.finish();
-                        let queue = self.queue.as_ref().unwrap();
-                        queue.submit([command_buffer]);
-                        queue.present(texture);
-                    }
-
-                    other => {
-                        println!("surface status {:?}", other);
-                    }
-                }
+                self.render();
             }
 
             WindowEvent::Resized(size) => {
@@ -159,10 +107,9 @@ impl ApplicationHandler for App {
 
 impl App {
     fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
-
         if size.width == 0 || size.height == 0 {
             return;
-            }
+        }
         let config = self.config.as_mut().unwrap();
         let device = self.device.as_ref().unwrap();
         let surface = self.surface.as_ref().unwrap();
@@ -172,8 +119,127 @@ impl App {
         println!("window resized: {}x{}", size.width, size.height);
         self.window.as_ref().unwrap().request_redraw();
     }
-}
 
+    fn render(&mut self) {
+        // println!("Redraw requested");
+        let now = Instant::now();
+
+        let delta_time = match self.last_frame {
+            Some(previous) => now.duration_since(previous).as_secs_f64(),
+            None => 0.0,
+        };
+
+        self.last_frame = Some(now);
+
+        self.fps_elapsed += delta_time;
+
+        if self.fps_elapsed >= 1.0 {
+            let fps = self.fps_frames as f64 / self.fps_elapsed;
+            println!("fps: {:.1}", fps);
+            self.fps_elapsed = 0.0;
+            self.fps_frames = 0;
+        }
+
+        let current_texture = (self.surface.as_ref().unwrap()).get_current_texture();
+
+        let needs_configure = matches!(&current_texture, Suboptimal(_));
+
+        match current_texture {
+            Success(texture) | Suboptimal(texture) => {
+                // println!("frame acquired");
+                let view = texture
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let device = self.device.as_ref().unwrap();
+
+                let descriptor = wgpu::CommandEncoderDescriptor {
+                    label: Some("jellyfish encoder"),
+                };
+                let mut encoder = device.create_command_encoder(&descriptor);
+
+                let color_attachment = wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.02,
+                            g: 0.03,
+                            b: 0.05,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                };
+
+                let color_attachments = [Some(color_attachment)];
+
+                let render_pass_descriptor = wgpu::RenderPassDescriptor {
+                    label: Some("Jellyfish render pass"),
+                    color_attachments: &color_attachments,
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                };
+
+                {
+                    let _render_pass = encoder.begin_render_pass(&render_pass_descriptor);
+                }
+
+                let command_buffer = encoder.finish();
+                let queue = self.queue.as_ref().unwrap();
+                queue.submit([command_buffer]);
+                queue.present(texture);
+
+                self.fps_frames += 1;
+
+                if needs_configure {
+                    let size = self.window.as_ref().unwrap().inner_size();
+                    self.resize(size);
+                } else {
+                    self.window.as_ref().unwrap().request_redraw();
+                }
+            }
+
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                println!("surface outdated, reconfiguring...");
+                let window = self.window.as_ref().unwrap();
+                let size = window.inner_size();
+                self.resize(size);
+            }
+
+            wgpu::CurrentSurfaceTexture::Lost => {
+                println!("surface lost, recreating...");
+                self.recreate_surface();
+            }
+
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                println!("frame skipped: timeout or occluded");
+            }
+
+            other => {
+                println!("surface status {:?}", other);
+            }
+        }
+    }
+
+    fn recreate_surface(&mut self) {
+        let window = self.window.as_ref().unwrap();
+        let instance = self.instance.as_ref().unwrap();
+
+        let size = window.inner_size();
+
+        if size.width == 0 || size.height == 0 {
+            return;
+        }
+        self.surface = None;
+        let new_surface = instance.create_surface(Arc::clone(window)).unwrap();
+        self.surface = Some(new_surface);
+        self.resize(size);
+    }
+}
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
