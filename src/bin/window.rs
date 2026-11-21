@@ -1,4 +1,5 @@
 use glam::Vec3 as GlamVec3;
+use jellyfish::animation::AnimationController;
 use jellyfish::graphics::camera::OrbitCamera;
 use jellyfish::graphics::context::{FrameStatus, GpuContext};
 use jellyfish::graphics::render::Render;
@@ -9,6 +10,8 @@ use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::Key;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 #[derive(Default)]
@@ -23,6 +26,7 @@ struct App {
     mouse_pressed: bool,
     last_cursor_position: Option<PhysicalPosition<f64>>,
     pan_pressed: bool,
+    animation: Option<AnimationController>,
 }
 
 impl ApplicationHandler for App {
@@ -30,7 +34,6 @@ impl ApplicationHandler for App {
         if self.window.is_some() {
             return;
         }
-
         let window_attributes = Window::default_attributes()
             .with_title("Jellyfish")
             .with_inner_size(winit::dpi::LogicalSize::new(1720.0, 960.0));
@@ -42,8 +45,9 @@ impl ApplicationHandler for App {
         let camera = OrbitCamera::new(GlamVec3::ZERO, 3.0);
         let vertices = lorenz_vertices();
 
-        let renderer = Render::new(gpu.device(), gpu.format(), &camera, gpu.aspect(), &vertices);
+        self.animation = Some(AnimationController::new(vertices.len().try_into().unwrap()));
 
+        let renderer = Render::new(gpu.device(), gpu.format(), &camera, gpu.aspect(), &vertices);
         self.window = Some(Arc::clone(&window));
         self.gpu = Some(gpu);
         self.camera = Some(camera);
@@ -76,6 +80,42 @@ impl ApplicationHandler for App {
                 self.last_cursor_position = None;
             }
 
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.state == ElementState::Pressed && !event.repeat {
+                    match event.physical_key {
+                        PhysicalKey::Code(KeyCode::Space) => {
+                            self.animation.as_mut().unwrap().toggle_pause();
+                        }
+
+                        PhysicalKey::Code(KeyCode::KeyR) => {
+                            self.animation.as_mut().unwrap().reset();
+                        }
+
+                        _ => {}
+                    }
+
+                    match &event.logical_key {
+                        Key::Character(key) if key.as_str() == "+" => {
+                            let animation = self.animation.as_mut().unwrap();
+
+                            animation.speed_up();
+
+                            println!("Animation speed: {:.0}", animation.speed());
+                        }
+
+                        Key::Character(key) if key.as_str() == "-" => {
+                            let animation = self.animation.as_mut().unwrap();
+
+                            animation.slow_down();
+
+                            println!("Animation speed: {:.0}", animation.speed());
+                        }
+
+                        _ => {}
+                    }
+                }
+            }
+
             WindowEvent::CursorMoved { position, .. } => {
                 if self.mouse_pressed || self.pan_pressed {
                     if let Some(previous) = self.last_cursor_position {
@@ -100,7 +140,7 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta, .. } => {
                 let scroll_y = match delta {
                     MouseScrollDelta::LineDelta(_, y) => y,
-                    MouseScrollDelta::PixelDelta(postition) => postition.y as f32 / 100.0,
+                    MouseScrollDelta::PixelDelta(position) => position.y as f32 / 100.0,
                 };
 
                 if let Some(camera) = self.camera.as_mut() {
@@ -152,6 +192,8 @@ impl App {
             None => 0.0,
         };
 
+        self.animation.as_mut().unwrap().update(delta_time);
+
         self.last_frame = Some(now);
         self.fps_elapsed += delta_time;
 
@@ -167,8 +209,8 @@ impl App {
         let result = self.gpu.as_mut().unwrap().render(
             self.renderer.as_ref().unwrap(),
             self.window.as_ref().unwrap(),
+            self.animation.as_ref().unwrap().visible_vertices(),
         );
-
         match result {
             FrameStatus::Presented { reconfigured } => {
                 self.fps_frames += 1;

@@ -34,6 +34,7 @@ pub fn project_xy(points: &[[f64; 3]]) -> Vec<Vertex> {
                 ((point[1] - center_y) * scale) as f32,
                 0.0,
             ],
+            speed: 0.0,
         })
         .collect()
 }
@@ -62,6 +63,7 @@ pub fn normalize_xyz(points: &[[f64; 3]]) -> Vec<Vertex> {
     }
 
     let scale = if span > 0.0 { 1.8 / span } else { 1.0 };
+
     points
         .iter()
         .map(|point| Vertex {
@@ -70,6 +72,7 @@ pub fn normalize_xyz(points: &[[f64; 3]]) -> Vec<Vertex> {
                 ((point[1] - center[1]) * scale) as f32,
                 ((point[2] - center[2]) * scale) as f32,
             ],
+            speed: 0.0,
         })
         .collect()
 }

@@ -103,7 +103,12 @@ impl GpuContext {
         true
     }
 
-    pub fn render(&mut self, renderer: &Render, window: &Arc<Window>) -> FrameStatus {
+    pub fn render(
+        &mut self,
+        renderer: &Render,
+        window: &Arc<Window>,
+        visible_vertices: u32,
+    ) -> FrameStatus {
         let current_texture = self.surface.as_ref().unwrap().get_current_texture();
 
         let needs_configure = matches!(&current_texture, Suboptimal(_));
@@ -114,8 +119,7 @@ impl GpuContext {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                renderer.draw_frame(&self.device, &self.queue, &view);
-
+                renderer.draw_frame(&self.device, &self.queue, &view, visible_vertices);
                 self.queue.present(texture);
 
                 if needs_configure && self.resize(window.inner_size()) {

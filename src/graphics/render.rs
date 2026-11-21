@@ -117,14 +117,20 @@ impl Render {
         }
     }
 
-    pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
+    pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>, visible_vertices: u32) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.draw(0..self.vertex_count, 0..1);
+        render_pass.draw(0..visible_vertices.min(self.vertex_count), 0..1);
     }
 
-    pub fn draw_frame(&self, device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::TextureView) {
+    pub fn draw_frame(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        view: &wgpu::TextureView,
+        visible_vertices: u32,
+    ) {
         let descriptor = wgpu::CommandEncoderDescriptor {
             label: Some("jellyfish encoder"),
         };
@@ -159,7 +165,7 @@ impl Render {
         {
             let mut render_pass = encoder.begin_render_pass(&render_pass_descriptor);
 
-            self.draw(&mut render_pass);
+            self.draw(&mut render_pass, visible_vertices);
         }
 
         let command_buffer = encoder.finish();
