@@ -1,7 +1,7 @@
 use glam::Vec3 as GlamVec3;
 use jellyfish::graphics::camera::OrbitCamera;
 use jellyfish::graphics::camera_uniform::CameraUniform;
-use jellyfish::graphics::vertex::Vertex;
+use jellyfish::graphics::render::Render;
 use jellyfish::scene::lorenz::lorenz_vertices;
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,13 +26,9 @@ struct App {
     last_frame: Option<Instant>,
     fps_elapsed: f64,
     fps_frames: u32,
-    vertex_buffer: Option<wgpu::Buffer>,
-    render_pipeline: Option<wgpu::RenderPipeline>,
-    vertex_count: u32,
+    renderer: Option<Render>,
     camera: Option<OrbitCamera>,
     camera_buffer: Option<wgpu::Buffer>,
-    camera_bind_group_layout: Option<wgpu::BindGroupLayout>,
-    camera_bind_group: Option<wgpu::BindGroup>,
     mouse_pressed: bool,
     last_cursor_position: Option<PhysicalPosition<f64>>,
     pan_pressed: bool,
@@ -110,104 +106,17 @@ impl ApplicationHandler for App {
             contents: bytemuck::bytes_of(&camera_uniform),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-
         self.camera = Some(camera);
         self.camera_buffer = Some(camera_buffer);
 
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("jellyfish camer bind group layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let camera_buffer = self.camera_buffer.as_ref().unwrap();
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("jellyfish camera bind group"),
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
-
-        self.camera_bind_group_layout = Some(camera_bind_group_layout);
-        self.camera_bind_group = Some(camera_bind_group);
-
         let vertices = lorenz_vertices();
-        self.vertex_count = vertices.len().try_into().unwrap();
 
-        let buffer_descriptor = wgpu::util::BufferInitDescriptor {
-            label: Some("Jellyfish vertex buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        };
-
-        let vertex_buffer = device.create_buffer_init(&buffer_descriptor);
-
-        self.vertex_buffer = Some(vertex_buffer);
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Jellyfish line shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../graphics/shaders/line.wgsl").into()),
-        });
-
-        let vertex_layouts = [Some(Vertex::layout())];
-
-        let color_targets = [Some(wgpu::ColorTargetState {
-            format: self.config.as_ref().unwrap().format,
-            blend: Some(wgpu::BlendState::REPLACE),
-            write_mask: wgpu::ColorWrites::ALL,
-        })];
-
-        let camera_layout = self.camera_bind_group_layout.as_ref().unwrap();
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("jellyfish pipeline layout"),
-            bind_group_layouts: &[Some(camera_layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline_descriptor = wgpu::RenderPipelineDescriptor {
-            label: Some("Jellyfish line pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
-                buffers: &vertex_layouts,
-            },
-
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineStrip,
-                ..Default::default()
-            },
-
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &color_targets,
-            }),
-
-            multiview_mask: None,
-            cache: None,
-        };
-
-        let render_pipeline = device.create_render_pipeline(&pipeline_descriptor);
-        self.render_pipeline = Some(render_pipeline);
-
+        self.renderer = Some(Render::new(
+            device,
+            self.config.as_ref().unwrap().format,
+            self.camera_buffer.as_ref().unwrap(),
+            &vertices,
+        ));
         // redraw
         window.request_redraw();
     }
@@ -341,58 +250,13 @@ impl App {
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
                 let device = self.device.as_ref().unwrap();
-
-                let descriptor = wgpu::CommandEncoderDescriptor {
-                    label: Some("jellyfish encoder"),
-                };
-                let mut encoder = device.create_command_encoder(&descriptor);
-
-                let color_attachment = wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.02,
-                            g: 0.03,
-                            b: 0.05,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                };
-
-                let color_attachments = [Some(color_attachment)];
-
-                let render_pass_descriptor = wgpu::RenderPassDescriptor {
-                    label: Some("Jellyfish render pass"),
-                    color_attachments: &color_attachments,
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                };
-
-                {
-                    let mut render_pass = encoder.begin_render_pass(&render_pass_descriptor);
-
-                    let pipeline = self.render_pipeline.as_ref().unwrap();
-
-                    let vertex_buffer = self.vertex_buffer.as_ref().unwrap();
-
-                    let camera_bind_group = self.camera_bind_group.as_ref().unwrap();
-
-                    render_pass.set_pipeline(pipeline);
-                    render_pass.set_bind_group(0, camera_bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-
-                    // draw
-                    render_pass.draw(0..self.vertex_count, 0..1);
-                }
-
-                let command_buffer = encoder.finish();
                 let queue = self.queue.as_ref().unwrap();
-                queue.submit([command_buffer]);
+
+                self.renderer
+                    .as_ref()
+                    .unwrap()
+                    .draw_frame(device, queue, &view);
+
                 queue.present(texture);
 
                 self.fps_frames += 1;
