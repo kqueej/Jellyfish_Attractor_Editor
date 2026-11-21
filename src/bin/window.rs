@@ -1,10 +1,8 @@
 use glam::Vec3 as GlamVec3;
-use jellyfish::dynamics::{Lorenz, generate_trajectory, rk4_step};
 use jellyfish::graphics::camera::OrbitCamera;
 use jellyfish::graphics::camera_uniform::CameraUniform;
-use jellyfish::graphics::projection::normalize_xyz;
 use jellyfish::graphics::vertex::Vertex;
-use jellyfish::math::Vec3;
+use jellyfish::scene::lorenz::lorenz_vertices;
 use std::sync::Arc;
 use std::time::Instant;
 use wgpu::CurrentSurfaceTexture::{Suboptimal, Success};
@@ -144,18 +142,7 @@ impl ApplicationHandler for App {
         self.camera_bind_group_layout = Some(camera_bind_group_layout);
         self.camera_bind_group = Some(camera_bind_group);
 
-        let system = Lorenz {
-            sigma: 10.0,
-            rho: 28.0,
-            beta: 8.0 / 3.0,
-        };
-
-        let initial = Vec3::new([1.0, 1.0, 1.0]);
-        let trajectory = generate_trajectory(&system, initial, 0.01, 10_000, 1000, rk4_step);
-
-        let points: Vec<[f64; 3]> = trajectory.iter().map(|point| *point.as_array()).collect();
-        let vertices = normalize_xyz(&points);
-
+        let vertices = lorenz_vertices();
         self.vertex_count = vertices.len().try_into().unwrap();
 
         let buffer_descriptor = wgpu::util::BufferInitDescriptor {
