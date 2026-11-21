@@ -1,3 +1,5 @@
+use crate::graphics::camera::OrbitCamera;
+use crate::graphics::camera_uniform::CameraUniform;
 use crate::graphics::vertex::Vertex;
 use wgpu::util::DeviceExt;
 
@@ -6,15 +8,25 @@ pub struct Render {
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
     camera_bind_group: wgpu::BindGroup,
+    camera_buffer: wgpu::Buffer,
 }
 
 impl Render {
     pub fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        camera_buffer: &wgpu::Buffer,
+        camera: &OrbitCamera,
+        aspect: f32,
         vertices: &[Vertex],
     ) -> Self {
+        let camera_uniform = CameraUniform::new(camera, aspect);
+
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("jellyfish camera buffer"),
+            contents: bytemuck::bytes_of(&camera_uniform),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Jellyfish camera bind group layout"),
@@ -101,6 +113,7 @@ impl Render {
             vertex_buffer,
             vertex_count,
             camera_bind_group,
+            camera_buffer,
         }
     }
 
@@ -151,5 +164,11 @@ impl Render {
 
         let command_buffer = encoder.finish();
         queue.submit([command_buffer]);
+    }
+
+    pub fn update_camera(&self, queue: &wgpu::Queue, camera: &OrbitCamera, aspect: f32) {
+        let uniform = CameraUniform::new(camera, aspect);
+
+        queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&uniform));
     }
 }
