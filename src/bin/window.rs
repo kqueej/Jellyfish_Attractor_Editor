@@ -1,5 +1,8 @@
+use glam::Vec3 as GlamVec3;
 use jellyfish::dynamics::{Lorenz, generate_trajectory, rk4_step};
-use jellyfish::graphics::projection::project_xy;
+use jellyfish::graphics::camera::OrbitCamera;
+use jellyfish::graphics::camera_uniform::CameraUniform;
+use jellyfish::graphics::projection::normalize_xyz;
 use jellyfish::graphics::vertex::Vertex;
 use jellyfish::math::Vec3;
 use std::sync::Arc;
@@ -27,6 +30,10 @@ struct App {
     vertex_buffer: Option<wgpu::Buffer>,
     render_pipeline: Option<wgpu::RenderPipeline>,
     vertex_count: u32,
+    camera: Option<OrbitCamera>,
+    camera_buffer: Option<wgpu::Buffer>,
+    camera_bind_group_layout: Option<wgpu::BindGroupLayout>,
+    camera_bind_group: Option<wgpu::BindGroup>,
 }
 
 impl ApplicationHandler for App {
@@ -90,6 +97,49 @@ impl ApplicationHandler for App {
 
         self.config = Some(config);
 
+        let aspect = size.width as f32 / size.height as f32;
+
+        let camera = OrbitCamera::new(GlamVec3::ZERO, 3.0);
+
+        let camera_uniform = CameraUniform::new(&camera, aspect);
+
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("jellyfish camera buffer"),
+            contents: bytemuck::bytes_of(&camera_uniform),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        self.camera = Some(camera);
+        self.camera_buffer = Some(camera_buffer);
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("jellyfish camer bind group layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let camera_buffer = self.camera_buffer.as_ref().unwrap();
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("jellyfish camera bind group"),
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
+        self.camera_bind_group_layout = Some(camera_bind_group_layout);
+        self.camera_bind_group = Some(camera_bind_group);
+
         let system = Lorenz {
             sigma: 10.0,
             rho: 28.0,
@@ -100,7 +150,7 @@ impl ApplicationHandler for App {
         let trajectory = generate_trajectory(&system, initial, 0.01, 10_000, 1000, rk4_step);
 
         let points: Vec<[f64; 3]> = trajectory.iter().map(|point| *point.as_array()).collect();
-        let vertices = project_xy(&points);
+        let vertices = normalize_xyz(&points);
 
         self.vertex_count = vertices.len().try_into().unwrap();
 
@@ -127,9 +177,17 @@ impl ApplicationHandler for App {
             write_mask: wgpu::ColorWrites::ALL,
         })];
 
+        let camera_layout = self.camera_bind_group_layout.as_ref().unwrap();
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("jellyfish pipeline layout"),
+            bind_group_layouts: &[Some(camera_layout)],
+            immediate_size: 0,
+        });
+
         let pipeline_descriptor = wgpu::RenderPipelineDescriptor {
             label: Some("Jellyfish line pipeline"),
-            layout: None,
+            layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
@@ -269,8 +327,10 @@ impl App {
 
                     let vertex_buffer = self.vertex_buffer.as_ref().unwrap();
 
-                    render_pass.set_pipeline(pipeline);
+                    let camera_bind_group = self.camera_bind_group.as_ref().unwrap();
 
+                    render_pass.set_pipeline(pipeline);
+                    render_pass.set_bind_group(0, camera_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
 
                     // draw

@@ -13,3 +13,15 @@ fn project_xy_normalization() {
         assert_eq!(vertex.position[2], 0.0);
     }
 }
+
+#[test]
+fn normalize_xyz_preserves_depth() {
+    use jellyfish::graphics::projection::normalize_xyz;
+
+    let points = [[-1.0, -2.0, 1.0], [1.0, 2.0, 5.0]];
+
+    let vertices = normalize_xyz(&points);
+    assert_eq!(vertices.len(), 2);
+    assert!((vertices[0].position[2] + 0.9).abs() < 1e-6);
+    assert!((vertices[1].position[2] - 0.9).abs() < 1e-6);
+}
