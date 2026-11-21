@@ -53,3 +53,21 @@ fn camera_zoom_limits() {
     camera.zoom(-1000.0);
     assert_eq!(camera.distance, 20.0);
 }
+
+#[test]
+fn camera_pan_preserves_distance() {
+    let mut camera = OrbitCamera::new(Vec3::ZERO, 5.0);
+
+    let old_target = camera.target;
+    let old_position = camera.position();
+
+    camera.pan(100.0, -50.0, 900.0);
+
+    assert_ne!(camera.target, old_target);
+
+    let target_movement = camera.target - old_target;
+    let camera_movement = camera.position() - old_position;
+
+    assert!((target_movement - camera_movement).length() < 1e-5);
+    assert!((camera.position().distance(camera.target) - 5.0).abs() < 1e-5);
+}

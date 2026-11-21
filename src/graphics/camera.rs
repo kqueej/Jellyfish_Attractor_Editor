@@ -36,6 +36,19 @@ impl OrbitCamera {
         self.distance = (self.distance * factor).clamp(MIN_DISTANCE, MAX_DISTANCE);
     }
 
+    pub fn pan(&mut self, delta_x: f32, delta_y: f32, viewport_height: f32) {
+        if viewport_height <= 0.0 {
+            return;
+        }
+
+        let forward = (self.target - self.position()).normalize();
+        let right = forward.cross(Vec3::Z).normalize();
+        let up = right.cross(forward).normalize();
+        let world_per_pixel = 2.0 * self.distance * (self.fov_y / 2.0).tan() / viewport_height;
+
+        self.target += (-right * delta_x + up * delta_y) * world_per_pixel;
+    }
+
     pub fn position(&self) -> Vec3 {
         let x = self.distance * self.pitch.cos() * self.yaw.cos();
         let y = self.distance * self.pitch.cos() * self.yaw.sin();

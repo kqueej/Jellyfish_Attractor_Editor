@@ -37,6 +37,7 @@ struct App {
     camera_bind_group: Option<wgpu::BindGroup>,
     mouse_pressed: bool,
     last_cursor_position: Option<PhysicalPosition<f64>>,
+    pan_pressed: bool,
 }
 
 impl ApplicationHandler for App {
@@ -249,15 +250,19 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::CursorMoved { position, .. } => {
-                if self.mouse_pressed {
+                if self.mouse_pressed || self.pan_pressed {
                     if let Some(previous) = self.last_cursor_position {
                         let delta_x = (position.x - previous.x) as f32;
                         let delta_y = (position.y - previous.y) as f32;
 
                         if let Some(camera) = self.camera.as_mut() {
-                            camera.rotate(delta_x, delta_y);
+                            if self.pan_pressed {
+                                let height = self.config.as_ref().unwrap().height as f32;
+                                camera.pan(delta_x, delta_y, height);
+                            } else {
+                                camera.rotate(delta_x, delta_y);
+                            }
                         }
-
                         self.update_camera_uniform();
                         self.window.as_ref().unwrap().request_redraw();
                     }
@@ -278,12 +283,22 @@ impl ApplicationHandler for App {
                 }
             }
 
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Right,
+                ..
+            } => {
+                self.pan_pressed = state == ElementState::Pressed;
+                self.last_cursor_position = None;
+            }
+
             WindowEvent::CursorLeft { .. } => {
                 self.last_cursor_position = None;
             }
 
             WindowEvent::Focused(false) => {
                 self.mouse_pressed = false;
+                self.pan_pressed = false;
                 self.last_cursor_position = None;
             }
             _ => (),
