@@ -27,6 +27,15 @@ impl OrbitCamera {
         self.pitch = self.pitch.clamp(-limit, limit);
     }
 
+    pub fn zoom(&mut self, delta: f32) {
+        const ZOOM_SPEED: f32 = 0.15;
+        const MIN_DISTANCE: f32 = 0.01;
+        const MAX_DISTANCE: f32 = 20.0;
+
+        let factor = (-delta * ZOOM_SPEED).exp();
+        self.distance = (self.distance * factor).clamp(MIN_DISTANCE, MAX_DISTANCE);
+    }
+
     pub fn position(&self) -> Vec3 {
         let x = self.distance * self.pitch.cos() * self.yaw.cos();
         let y = self.distance * self.pitch.cos() * self.yaw.sin();
@@ -40,7 +49,7 @@ impl OrbitCamera {
     }
 
     pub fn projection_matrix(&self, aspect: f32) -> Mat4 {
-        glam::camera::rh::proj::directx::perspective(self.fov_y, aspect, 0.1, 1000.0)
+        glam::camera::rh::proj::directx::perspective(self.fov_y, aspect, 0.001, 1000.0)
     }
 
     pub fn view_projection_matrix(&self, aspect: f32) -> Mat4 {

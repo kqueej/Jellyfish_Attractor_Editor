@@ -12,7 +12,7 @@ use wgpu::PowerPreference::HighPerformance;
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -262,6 +262,19 @@ impl ApplicationHandler for App {
                         self.window.as_ref().unwrap().request_redraw();
                     }
                     self.last_cursor_position = Some(position);
+                }
+            }
+
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scroll_y = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(postition) => postition.y as f32 / 100.0,
+                };
+
+                if let Some(camera) = self.camera.as_mut() {
+                    camera.zoom(scroll_y);
+                    self.update_camera_uniform();
+                    self.window.as_ref().unwrap().request_redraw();
                 }
             }
 

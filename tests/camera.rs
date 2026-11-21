@@ -31,3 +31,25 @@ fn camera_rotation_limits_pitch() {
 
     assert!(camera.pitch > -std::f32::consts::FRAC_PI_2);
 }
+
+#[test]
+fn camera_zoom_direction() {
+    let mut camera = OrbitCamera::new(Vec3::ZERO, 5.0);
+
+    camera.zoom(1.0);
+    assert!(camera.distance < 5.0);
+
+    camera.zoom(-1.0);
+    assert!((camera.distance - 5.0).abs() < 1e-5);
+}
+
+#[test]
+fn camera_zoom_limits() {
+    let mut camera = OrbitCamera::new(Vec3::ZERO, 5.0);
+
+    camera.zoom(1000.0);
+    assert_eq!(camera.distance, 2.0);
+
+    camera.zoom(-1000.0);
+    assert_eq!(camera.distance, 20.0);
+}
