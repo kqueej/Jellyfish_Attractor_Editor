@@ -11,7 +11,8 @@ use wgpu::CurrentSurfaceTexture::{Suboptimal, Success};
 use wgpu::PowerPreference::HighPerformance;
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::dpi::PhysicalPosition;
+use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -34,6 +35,8 @@ struct App {
     camera_buffer: Option<wgpu::Buffer>,
     camera_bind_group_layout: Option<wgpu::BindGroupLayout>,
     camera_bind_group: Option<wgpu::BindGroup>,
+    mouse_pressed: bool,
+    last_cursor_position: Option<PhysicalPosition<f64>>,
 }
 
 impl ApplicationHandler for App {
@@ -236,6 +239,40 @@ impl ApplicationHandler for App {
                 self.resize(size);
             }
 
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Left,
+                ..
+            } => {
+                self.mouse_pressed = state == ElementState::Pressed;
+                self.last_cursor_position = None;
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                if self.mouse_pressed {
+                    if let Some(previous) = self.last_cursor_position {
+                        let delta_x = (position.x - previous.x) as f32;
+                        let delta_y = (position.y - previous.y) as f32;
+
+                        if let Some(camera) = self.camera.as_mut() {
+                            camera.rotate(delta_x, delta_y);
+                        }
+
+                        self.update_camera_uniform();
+                        self.window.as_ref().unwrap().request_redraw();
+                    }
+                    self.last_cursor_position = Some(position);
+                }
+            }
+
+            WindowEvent::CursorLeft { .. } => {
+                self.last_cursor_position = None;
+            }
+
+            WindowEvent::Focused(false) => {
+                self.mouse_pressed = false;
+                self.last_cursor_position = None;
+            }
             _ => (),
         }
     }
@@ -252,6 +289,7 @@ impl App {
         config.width = size.width;
         config.height = size.height;
         surface.configure(device, config);
+        self.update_camera_uniform();
         println!("window resized: {}x{}", size.width, size.height);
         self.window.as_ref().unwrap().request_redraw();
     }
@@ -372,6 +410,21 @@ impl App {
                 println!("surface status {:?}", other);
             }
         }
+    }
+
+    fn update_camera_uniform(&self) {
+        let camera = self.camera.as_ref().unwrap();
+        let config = self.config.as_ref().unwrap();
+        if config.width == 0 || config.height == 0 {
+            return;
+        }
+
+        let aspect = config.width as f32 / config.height as f32;
+        let uniform = CameraUniform::new(camera, aspect);
+        let queue = self.queue.as_ref().unwrap();
+        let camera_buffer = self.camera_buffer.as_ref().unwrap();
+
+        queue.write_buffer(camera_buffer, 0, bytemuck::bytes_of(&uniform));
     }
 
     fn recreate_surface(&mut self) {

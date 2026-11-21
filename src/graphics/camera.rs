@@ -19,6 +19,14 @@ impl OrbitCamera {
         }
     }
 
+    pub fn rotate(&mut self, delta_x: f32, delta_y: f32) {
+        const SENSITIVITY: f32 = 0.005;
+        self.yaw -= delta_x * SENSITIVITY;
+        self.pitch += delta_y * SENSITIVITY;
+        let limit = 89.0_f32.to_radians();
+        self.pitch = self.pitch.clamp(-limit, limit);
+    }
+
     pub fn position(&self) -> Vec3 {
         let x = self.distance * self.pitch.cos() * self.yaw.cos();
         let y = self.distance * self.pitch.cos() * self.yaw.sin();

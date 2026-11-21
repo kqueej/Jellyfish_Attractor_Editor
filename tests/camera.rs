@@ -18,3 +18,16 @@ fn camer_target_is_centered() {
     assert!((clip.x / clip.w).abs() < 1e-5);
     assert!((clip.y / clip.w).abs() < 1e-5);
 }
+
+#[test]
+fn camera_rotation_limits_pitch() {
+    let mut camera = OrbitCamera::new(Vec3::ZERO, 5.0);
+
+    camera.rotate(0.0, 100_000.0);
+
+    assert!(camera.pitch < std::f32::consts::FRAC_PI_2);
+
+    camera.rotate(0.0, -200_000.0);
+
+    assert!(camera.pitch > -std::f32::consts::FRAC_PI_2);
+}

@@ -19,7 +19,7 @@ fn vertex_bytes() {
         },
     ];
 
-    let bytes: &[u8] = &bytemuck::cast_slice(&vertices);
+    let bytes: &[u8] = bytemuck::cast_slice(&vertices);
     assert_eq!(bytes.len(), 36);
 }
 #[test]
