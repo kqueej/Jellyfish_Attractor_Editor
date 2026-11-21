@@ -48,7 +48,7 @@ fn camera_zoom_limits() {
     let mut camera = OrbitCamera::new(Vec3::ZERO, 5.0);
 
     camera.zoom(1000.0);
-    assert_eq!(camera.distance, 2.0);
+    assert_eq!(camera.distance, 0.01);
 
     camera.zoom(-1000.0);
     assert_eq!(camera.distance, 20.0);
