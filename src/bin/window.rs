@@ -3,7 +3,7 @@ use jellyfish::animation::AnimationController;
 use jellyfish::graphics::camera::OrbitCamera;
 use jellyfish::graphics::context::{FrameStatus, GpuContext};
 use jellyfish::graphics::render::Render;
-use jellyfish::scene::lorenz::lorenz_vertices;
+use jellyfish::scene::config::AttractorConfig;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
@@ -27,6 +27,7 @@ struct App {
     last_cursor_position: Option<PhysicalPosition<f64>>,
     pan_pressed: bool,
     animation: Option<AnimationController>,
+    attractor_config: Option<AttractorConfig>,
 }
 
 impl ApplicationHandler for App {
@@ -43,7 +44,8 @@ impl ApplicationHandler for App {
         let gpu = GpuContext::new(Arc::clone(&window));
 
         let camera = OrbitCamera::new(GlamVec3::ZERO, 3.0);
-        let vertices = lorenz_vertices();
+        let attractor_config = AttractorConfig::lorenz();
+        let vertices = attractor_config.vertices();
 
         self.animation = Some(AnimationController::new(vertices.len().try_into().unwrap()));
 
@@ -52,6 +54,7 @@ impl ApplicationHandler for App {
         self.gpu = Some(gpu);
         self.camera = Some(camera);
         self.renderer = Some(renderer);
+        self.attractor_config = Some(attractor_config);
 
         window.request_redraw();
     }
@@ -91,6 +94,13 @@ impl ApplicationHandler for App {
                             self.animation.as_mut().unwrap().reset();
                         }
 
+                        PhysicalKey::Code(KeyCode::Digit1) => {
+                            self.switch_attractor(AttractorConfig::lorenz());
+                        }
+
+                        PhysicalKey::Code(KeyCode::Digit2) => {
+                            self.switch_attractor(AttractorConfig::rossler());
+                        }
                         _ => {}
                     }
 
@@ -239,6 +249,30 @@ impl App {
             .as_ref()
             .unwrap()
             .update_camera(gpu.queue(), camera, gpu.aspect());
+    }
+
+    fn switch_attractor(&mut self, config: AttractorConfig) {
+        let vertices = config.vertices();
+
+        let Some(gpu) = self.gpu.as_ref() else {
+            return;
+        };
+
+        let Some(renderer) = self.renderer.as_mut() else {
+            return;
+        };
+
+        renderer.update_vertices(gpu.device(), &vertices);
+
+        let vertex_count = u32::try_from(vertices.len()).expect("Too many vertices");
+
+        self.animation = Some(AnimationController::new(vertex_count));
+        self.attractor_config = Some(config);
+        self.last_frame = Some(Instant::now());
+
+        if let Some(window) = self.window.as_ref() {
+            window.request_redraw();
+        }
     }
 }
 

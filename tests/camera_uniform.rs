@@ -13,5 +13,5 @@ fn camera_uniform_matrix() {
     let aspect = 16.0 / 9.0;
     let uniform = CameraUniform::new(&camera, aspect);
     let expected = camera.view_projection_matrix(aspect).to_cols_array_2d();
-    assert_eq!(uniform.view_projectrion, expected);
+    assert_eq!(uniform.view_projection, expected);
 }

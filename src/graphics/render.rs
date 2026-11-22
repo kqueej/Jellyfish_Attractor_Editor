@@ -177,4 +177,18 @@ impl Render {
 
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&uniform));
     }
+    pub fn update_vertices(&mut self, device: &wgpu::Device, vertices: &[Vertex]) {
+        if vertices.is_empty() {
+            self.vertex_count = 0;
+            return;
+        }
+
+        self.vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Jellyfish vertex buffer"),
+            contents: bytemuck::cast_slice(vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        self.vertex_count = vertices.len().try_into().unwrap();
+    }
 }
