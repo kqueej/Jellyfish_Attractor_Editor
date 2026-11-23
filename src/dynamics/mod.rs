@@ -1,6 +1,7 @@
 mod attractor;
 mod integrator;
 mod lorenz;
+mod parameters;
 mod rk4;
 mod rossler;
 mod system;
@@ -8,6 +9,7 @@ mod trajectory;
 pub use attractor::Attractor;
 pub use integrator::euler_step;
 pub use lorenz::Lorenz;
+pub use parameters::ParameterSpec;
 pub use rk4::rk4_step;
 pub use rossler::Rossler;
 pub use system::DynamicalSystem;

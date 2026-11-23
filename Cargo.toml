@@ -9,3 +9,6 @@ glam = "0.34.3"
 pollster = "=1.0.1"
 wgpu = "=30.0.2"
 winit = "=0.30.13"
+egui = { version = "=0.37.0", features = ["default_fonts"] }
+egui-winit = "=0.37.0"
+egui-wgpu = "=0.37.0"

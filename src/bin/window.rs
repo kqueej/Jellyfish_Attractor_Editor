@@ -4,6 +4,7 @@ use jellyfish::graphics::camera::OrbitCamera;
 use jellyfish::graphics::context::{FrameStatus, GpuContext};
 use jellyfish::graphics::render::Render;
 use jellyfish::scene::config::AttractorConfig;
+use jellyfish::ui::Gui;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
@@ -28,6 +29,7 @@ struct App {
     pan_pressed: bool,
     animation: Option<AnimationController>,
     attractor_config: Option<AttractorConfig>,
+    gui: Option<Gui>,
 }
 
 impl ApplicationHandler for App {
@@ -42,6 +44,11 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         let gpu = GpuContext::new(Arc::clone(&window));
+        let gui = Gui::new(
+            window.as_ref(),
+            gpu.device(),
+            gpu.format(),
+        );
 
         let camera = OrbitCamera::new(GlamVec3::ZERO, 3.0);
         let attractor_config = AttractorConfig::lorenz();
@@ -55,11 +62,49 @@ impl ApplicationHandler for App {
         self.camera = Some(camera);
         self.renderer = Some(renderer);
         self.attractor_config = Some(attractor_config);
+        self.gui = Some(gui);
 
         window.request_redraw();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+
+
+        let egui_consumed = if let (Some(gui), Some(window)) =
+            (self.gui.as_mut(), self.window.as_ref())
+        {
+            let response = gui.on_window_event(window, &event);
+
+            if response.repaint {
+                window.request_redraw();
+            }
+
+            response.consumed
+        } else {
+            false
+        };
+
+        if egui_consumed {
+            let is_pointer_event = matches!(
+                &event,
+                WindowEvent::MouseInput { .. }
+                    | WindowEvent::MouseWheel { .. }
+                    | WindowEvent::CursorMoved { .. }
+            );
+
+            if is_pointer_event {
+                self.mouse_pressed = false;
+                self.pan_pressed = false;
+                self.last_cursor_position = None;
+            }
+
+            if is_pointer_event
+                || matches!(&event, WindowEvent::KeyboardInput { .. })
+            {
+                return;
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
@@ -216,11 +261,41 @@ impl App {
             self.fps_frames = 0;
         }
 
-        let result = self.gpu.as_mut().unwrap().render(
-            self.renderer.as_ref().unwrap(),
-            self.window.as_ref().unwrap(),
-            self.animation.as_ref().unwrap().visible_vertices(),
+
+
+        let window = self.window.as_ref().unwrap();
+        let renderer = self.renderer.as_ref().unwrap();
+        let gui = self.gui.as_mut().unwrap();
+
+        let attractor = &mut self
+            .attractor_config
+            .as_mut()
+            .unwrap()
+            .system;
+
+        let visible_vertices = self
+            .animation
+            .as_ref()
+            .unwrap()
+            .visible_vertices();
+
+        let mut parameters_changed = false;
+
+        let result = self.gpu.as_mut().unwrap().render_with_overlay(
+            renderer,
+            window,
+            visible_vertices,
+            |device, queue, view| {
+                parameters_changed =
+                    gui.draw(window, device, queue, view, attractor);
+            },
         );
+
+        if parameters_changed {
+            self.rebuild_attractor_vertices();
+        }
+
+
         match result {
             FrameStatus::Presented { reconfigured } => {
                 self.fps_frames += 1;
@@ -269,6 +344,29 @@ impl App {
         self.animation = Some(AnimationController::new(vertex_count));
         self.attractor_config = Some(config);
         self.last_frame = Some(Instant::now());
+
+        if let Some(window) = self.window.as_ref() {
+            window.request_redraw();
+        }
+    }
+
+
+    fn rebuild_attractor_vertices(&mut self) {
+        let Some(config) = self.attractor_config.as_ref() else {
+            return;
+        };
+
+        let vertices = config.vertices();
+
+        let Some(gpu) = self.gpu.as_ref() else {
+            return;
+        };
+
+        let Some(renderer) = self.renderer.as_mut() else {
+            return;
+        };
+
+        renderer.update_vertices(gpu.device(), &vertices);
 
         if let Some(window) = self.window.as_ref() {
             window.request_redraw();

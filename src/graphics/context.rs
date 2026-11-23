@@ -109,7 +109,33 @@ impl GpuContext {
         window: &Arc<Window>,
         visible_vertices: u32,
     ) -> FrameStatus {
-        let current_texture = self.surface.as_ref().unwrap().get_current_texture();
+        self.render_with_overlay(
+            renderer,
+            window,
+            visible_vertices,
+            |_, _, _| {},
+        )
+    }
+
+    pub fn render_with_overlay<F>(
+        &mut self,
+        renderer: &Render,
+        window: &Arc<Window>,
+        visible_vertices: u32,
+        overlay: F,
+    ) -> FrameStatus
+    where
+        F: FnOnce(
+            &wgpu::Device,
+            &wgpu::Queue,
+            &wgpu::TextureView,
+        ),
+    {
+        let current_texture = self
+            .surface
+            .as_ref()
+            .unwrap()
+            .get_current_texture();
 
         let needs_configure = matches!(&current_texture, Suboptimal(_));
 
@@ -119,11 +145,21 @@ impl GpuContext {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                renderer.draw_frame(&self.device, &self.queue, &view, visible_vertices);
+                renderer.draw_frame(
+                    &self.device,
+                    &self.queue,
+                    &view,
+                    visible_vertices,
+                );
+
+                overlay(&self.device, &self.queue, &view);
+
                 self.queue.present(texture);
 
                 if needs_configure && self.resize(window.inner_size()) {
-                    FrameStatus::Presented { reconfigured: true }
+                    FrameStatus::Presented {
+                        reconfigured: true,
+                    }
                 } else {
                     FrameStatus::Presented {
                         reconfigured: false,
@@ -151,7 +187,8 @@ impl GpuContext {
                 }
             }
 
-            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded => {
                 println!("frame skipped: timeout or occluded");
                 FrameStatus::Skipped
             }
@@ -162,6 +199,7 @@ impl GpuContext {
             }
         }
     }
+
 
     fn recreate_surface(&mut self, window: Arc<Window>) -> bool {
         let size = window.inner_size();
