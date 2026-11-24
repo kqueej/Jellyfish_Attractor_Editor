@@ -88,7 +88,7 @@ impl Gui {
                     delta,
                 );
             }
-}
+        }
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Jellyfish GUI encoder"),
