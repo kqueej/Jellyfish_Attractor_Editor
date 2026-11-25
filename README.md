@@ -26,7 +26,7 @@ cargo run --release --bin window
 
 ### Contributing (most important part)
 
-I'd like to work on this proj with somebody. Cuz I'm not a professional in Rust / Graphics 
+I'd like to work on this proj with somebody. Cuz I'm not a professional in Rust / Graphics / Vulkan
 
 ### Main idea
 
